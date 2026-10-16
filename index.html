@@ -84,8 +84,9 @@ var db={collection:function(col){return{add:function(d){return jf(col,"POST",d).
 doc:function(p){var col=p.split("/")[0];function aft(r){emit(col);return r}return{set:function(d){return jf(p,"PUT",d).then(aft)},update:function(d){return jf(p,"PATCH",d).then(aft)},delete:function(){return jf(p,"DELETE").then(aft)}}}};
 var user={id:function(){return Promise.resolve(uid)},me:function(){return Promise.resolve({id:uid,name:NM[uid]||""})},profiles:function(ids){var o={};ids.forEach(function(i){o[i]={name:NM[i]||""}});return Promise.resolve(o)}};
 window.claude={use:function(n){return Promise.resolve(n==="user"?user:(n==="db"&&c&&c.url&&c.who&&c.code?db:null))}};
+window.smHasCfg=function(){return !!(c&&c.url&&c.who&&c.code)};
 window.smSave=function(){var v=(document.getElementById("smu").value||"").trim();if(!/^https:\/\/.+/.test(v)){alert("Adres https:// ile başlamalı");return}var cd=(document.getElementById("smc").value||"").toLowerCase().replace(/[^a-z0-9]/g,"");if(cd.length<5){alert("Özel kod en az 5 harf veya rakam olmalı");return}var wr=document.querySelector('input[name="smw"]:checked');if(!wr){alert("Ecrin mi Huzur mu olduğunu seç");return}
-fetch(v.replace(/\/+$/,"")+"/r-"+cd+".json").then(function(r){if(!r.ok)throw 0;try{localStorage.setItem(K,JSON.stringify({url:v,who:wr.value,code:cd}))}catch(e){alert("Tarayıcı ayarı kaydedemedi. Dosyayı Chrome'da aç.");return}location.reload()}).catch(function(){alert("Bağlanamadı. Adresi ve veritabanı kurallarını kontrol et.")})};
+fetch(v.replace(/\/+$/,"")+"/r-"+cd+".json").then(function(r){if(!r.ok)throw 0;try{localStorage.setItem(K,JSON.stringify({url:v,who:wr.value,code:cd}))}catch(e){alert("Tarayıcı ayarı kaydedemedi. Dosyayı Chrome'da aç.");return}c={url:v,who:wr.value,code:cd};uid=c.who;if(window.smBoot)window.smBoot();else location.reload()}).catch(function(){alert("Bağlanamadı. Adresi ve veritabanı kurallarını kontrol et.")})};
 window.smSetup=function(){return'<div class="card"><div class="t">🔗 Bağlantı kur</div><div class="sm" style="margin-top:6px">Sevgilinle ortak kullanmak için Firebase veritabanı adresini yapıştır. İkiniz de aynı adresi girin.</div><label>Sen kimsin?</label><div class="opts"><label class="opt" style="margin:0"><input type="radio" name="smw" value="ecrin" style="width:auto;margin-right:6px">Ecrin</label><label class="opt" style="margin:0"><input type="radio" name="smw" value="huzur" style="width:auto;margin-right:6px">Huzur</label></div><div class="sm" style="margin-top:6px">Kendi adını seç. İkiniz aynı adı seçmeyin.</div><label>Özel kod</label><input id="smc" placeholder="ikinizin bildiği gizli kod (en az 5 harf/rakam)" value="'+((c&&c.code)||"")+'" autocapitalize="off" autocorrect="off"><div class="sm" style="margin-top:6px">Sadece ikiniz bilin. Aynı kodu girmeyen kimse verilerinize erişemez.</div><label>Veritabanı adresi</label><input id="smu" placeholder="https://xxxx-default-rtdb.firebaseio.com" value="'+((c&&c.url)||"")+'" autocapitalize="off" autocorrect="off"><button class="btn" onclick="smSave()">Kaydet ve başla</button></div>'};
 })();
 </script>
@@ -191,7 +192,8 @@ function render(){
   var sc=score(),ids=Object.keys(sc);
   document.getElementById("sc").textContent=ids.length?ids.map(function(i){return nm(i)+" "+sc[i]}).join(" · "):"🎯 0 – 0";
   document.querySelectorAll("nav button").forEach(function(b){b.className=b.dataset.t===st.tab?"on":""});
-  if(!db){app.innerHTML=window.smSetup();return}
+  if(!db){st.lh=null;app.innerHTML=(window.smHasCfg&&window.smHasCfg()&&!st.bootErr)?'<div class="msg">Yükleniyor…</div>':window.smSetup();return}
+  if(!st.loaded){st.lh=null;app.innerHTML='<div class="msg">Yükleniyor…</div>';return}
   var h="";
   if(st.tab==="feed"){
     h=feedTab();
@@ -222,6 +224,7 @@ function render(){
     h+='<div class="card sm">Toplam <b>'+st.songs.length+'</b> şarkı · Türkçe <b>'+tr+'</b> · Yabancı <b>'+st.songs.filter(function(s){return s.lang==="Yabancı"}).length+'</b></div>';h=appPick()+h+listenTab()+achTab();
   }
   h+=sheet()+slotSheet()+delSheet();
+  if(h===st.lh&&!st.pre)return;st.lh=h;
   var keep=document.activeElement&&document.activeElement.id,kv=keep?document.activeElement.value:null,ss=keep?document.activeElement.selectionStart:0,se=keep?document.activeElement.selectionEnd:0,sy=window.scrollY;
   var ft=document.getElementById("ft"),fa=document.getElementById("fa"),fn=document.getElementById("fn");
   var sv=st.pre?[st.pre.title,st.pre.artist,st.pre.note]:[ft&&ft.value,fa&&fa.value,fn&&fn.value];st.pre=null;
@@ -235,7 +238,9 @@ function render(){
 function upd(id,fields){return db.doc("songs/"+id).update(fields).catch(function(e){st.err="Kaydedilemedi: "+(e&&e.message||"hata");render()})}
 function find(id){return st.songs.filter(function(s){return s.id===id})[0]}
 
+(function(){var vv=window.visualViewport,last=vv?vv.height:innerHeight;(vv||window).addEventListener("resize",function(){var h=vv?vv.height:innerHeight;if(h>last+80){var a=document.activeElement;if(a&&/^(INPUT|TEXTAREA)$/.test(a.tagName))a.blur()}last=h})})();
 document.addEventListener("click",function(e){
+  var ae=document.activeElement;if(ae&&/^(INPUT|TEXTAREA)$/.test(ae.tagName)&&!e.target.closest("input,textarea,label,select"))ae.blur();
   var t=e.target.closest("button,a");
   if(!t){if(e.target.classList.contains("ov")){st.del=null;st.sheet=null;st.slotEdit=null;render();return}var cs=e.target.closest(".card[data-slot]");if(cs){st.slotEdit=cs.dataset.slot;var cu=st.slots.filter(function(x){return x.id===cs.dataset.slot+"_"+st.me})[0];st.sf=cu?{t:cu.title,a:cu.artist,n:cu.note||""}:{t:"",a:"",n:""};render();return}var cd=e.target.closest(".card[data-id]");if(cd&&!e.target.closest("input,textarea")){st.sheet=cd.dataset.id;render()}return}
   if(t.dataset.t){st.tab=t.dataset.t;if(st.tab==="add"){st.mode="feed";st.edit=null;st.fsv=""}render();return}
@@ -244,6 +249,9 @@ document.addEventListener("click",function(e){
   if(a==="sh-close"){st.sheet=null;render();return}
   if(a==="slotclose"){st.slotEdit=null;render();return}
   if(a==="slotsave"){var f1=st.sf||{};if(!(f1.t||"").trim()||!(f1.a||"").trim()){alert("Şarkı adı ve sanatçı gerekli");return}db.doc("slots/"+st.slotEdit+"_"+st.me).set({key:st.slotEdit,title:f1.t.trim(),artist:f1.a.trim(),note:(f1.n||"").trim(),by:st.me,ts:Date.now()}).catch(function(){st.err="Kaydedilemedi";render()});st.slotEdit=null;render();return}
+  if(a==="dnsave"||a==="dndel"){var dd=st.cal&&st.cal.d,tx=a==="dndel"?"":((document.getElementById("dn")||{}).value||"").trim(),did2="not-"+dd+"_"+st.me;
+    if(tx)db.doc("slots/"+did2).set({key:"not-"+dd,title:"",artist:"",note:tx,by:st.me,ts:Date.now()}).catch(function(){st.err="Kaydedilemedi";render()});else db.doc("slots/"+did2).delete().catch(function(){});
+    st.dnv={d:dd,t:tx};st.dnok=tx?dd:null;render();return}
   if(a==="slotdel"){db.doc("slots/"+st.slotEdit+"_"+st.me).delete();st.slotEdit=null;render();return}
   if(a==="cancel"){st.edit=null;st.tab=st.mode==="game"?"game":"feed";render();return}
   if(a==="newgame"){st.clue="";st.fsv="";st.mode="game";st.edit=null;st.tab="add";render();return}
@@ -273,7 +281,7 @@ document.addEventListener("click",function(e){
   }
 });
 
-document.addEventListener("input",function(e){var m={ss1:"t",ss2:"a",ss3:"n"}[e.target.id];if(m){st.sf=st.sf||{};st.sf[m]=e.target.value}});
+document.addEventListener("input",function(e){if(e.target.id==="dn"&&st.cal){st.dnv={d:st.cal.d,t:e.target.value};st.dnok=null}var m={ss1:"t",ss2:"a",ss3:"n"}[e.target.id];if(m){st.sf=st.sf||{};st.sf[m]=e.target.value}});
 function names(){
   var ids={};st.songs.forEach(function(s){ids[s.by]=1;if(s.game&&s.game.by)ids[s.game.by]=1});st.slots.forEach(function(s){ids[s.by]=1});
   var l=Object.keys(ids).filter(function(i){return i!==st.me&&!(i in st.names)});
@@ -297,16 +305,20 @@ function dk(t){var d=new Date(t);return d.getFullYear()+"-"+pad(d.getMonth()+1)+
 function calTab(){
   var n=new Date(),c=st.cal||(st.cal={y:n.getFullYear(),m:n.getMonth(),d:dk(n)}),by={};
   var first=(new Date(c.y,c.m,1).getDay()+6)%7,dim=new Date(c.y,c.m+1,0).getDate();
-  st.songs.forEach(function(s){var k=dk(s.ts);(by[k]=by[k]||[]).push(s)});
-  st.slots.forEach(function(x){if(x.key.indexOf("gun-")===0){var k=x.key.slice(4);(by[k]=by[k]||[]).push({slot:x})}});
+  var nt={};
+  st.slots.forEach(function(x){var k;if(x.key.indexOf("gun-")===0){k=x.key.slice(4);(by[k]=by[k]||[]).push({slot:x})}else if(x.key.indexOf("not-")===0&&x.note){k=x.key.slice(4);(nt[k]=nt[k]||[]).push(x)}});
   var h='<div class="card"><div class="top"><button class="btn s g" data-act="cprev">‹</button><div class="t" style="flex:1;text-align:center">'+TR_M[c.m]+' '+c.y+'</div><button class="btn s g" data-act="cnext">›</button></div><div class="cal">'+["Pt","Sa","Ça","Pe","Cu","Ct","Pz"].map(function(x){return'<div class="sm" style="text-align:center">'+x+'</div>'}).join("");
   for(var i=0;i<first;i++)h+='<div></div>';
-  for(var d=1;d<=dim;d++){var k=c.y+"-"+pad(c.m+1)+"-"+pad(d),l=by[k]||[],f=l.filter(function(x){return x.mood!=null})[0];
-    h+='<button class="day'+(k===c.d?' on':'')+'" data-act="cday" data-v="'+k+'">'+d+'<span>'+(l.length?(f?MOODS[f.mood][0]:"⭐")+(l.length>1?'<i>'+l.length+'</i>':''):'&nbsp;')+'</span></button>'}
+  for(var d=1;d<=dim;d++){var k=c.y+"-"+pad(c.m+1)+"-"+pad(d),l=by[k]||[],hn=!!nt[k];
+    h+='<button class="day'+(k===c.d?' on':'')+'" data-act="cday" data-v="'+k+'">'+d+'<span>'+((l.length||hn)?(l.length?"⭐":"")+(hn?"📝":"")+(l.length>1?'<i>'+l.length+'</i>':''):'&nbsp;')+'</span></button>'}
   h+='</div></div><div class="t" style="margin:14px 2px 0">'+c.d.split("-").reverse().join(".")+'</div>';
   var ds=by[c.d]||[];
   ds.forEach(function(x){h+=x.slot?'<div class="card"><div class="t">'+esc(x.slot.title)+'</div><div class="a">'+esc(x.slot.artist)+' · ⭐ Günün şarkısı · '+esc(nm(x.slot.by))+'</div></div>':card(x)});
-  return h+(ds.length?'':'<div class="sm" style="padding:10px 2px">Bu güne şarkı eklenmemiş.</div>')}
+  if(!ds.length)h+='<div class="sm" style="padding:10px 2px">Bu gün için "Bugünün şarkısı" eklenmemiş.</div>';
+  var mine=null;(nt[c.d]||[]).forEach(function(x){if(x.by===st.me)mine=x;else h+='<div class="card"><div class="a">📝 '+esc(nm(x.by))+' notu</div><div class="note">'+esc(x.note)+'</div></div>'});
+  var dv=st.dnv&&st.dnv.d===c.d?st.dnv.t:(mine?mine.note:"");
+  h+='<div class="card"><div class="t">📝 Bu günün notu</div><textarea id="dn" rows="3" style="margin-top:8px" placeholder="Bu güne bir not bırak…">'+esc(dv)+'</textarea><div class="row"><button class="btn s" data-act="dnsave">Kaydet</button>'+(mine?'<button class="btn s g" data-act="dndel">Notu sil</button>':'')+'</div>'+(st.dnok===c.d?'<div class="sm ok" style="margin-top:8px">✓ Kaydedildi</div>':'')+'</div>';
+  return h}
 function hintChips(s,n){var a=[s.lang,s.era].filter(Boolean),w=s.title.trim().split(/\s+/).length,L=s.title.replace(/\s/g,"").length;
   if(n>=1)a.push(w+" kelime · "+L+" harf");
   if(n>=2)a.push(s.clue?"💬 "+s.clue:"Sanatçı "+s.artist.replace(/\s/g,"").length+" harfli");
@@ -359,7 +371,7 @@ function achTab(){
   A("🌙","Gece Kuşu","Gece (00–05) # şarkı ekle",cnt(function(s){return new Date(s.ts).getHours()<5}),[1,5,15]),
   A("🎯","Sır Perdesi","# oyun şarkısı gönder",cnt(function(s){return s.game}),[1,5,15,30]),A("🧠","Kulak Ustası","# oyun şarkısı bil",sv.length,[3,10,25,50]),
   A("💎","İpucusuz","İpucu açmadan # şarkı bil",sv.filter(function(s){return!s.game.hints}).length,[1,5,15]),
-  A("⭐","Günün Şarkısı","Zaman sekmesinde # şarkı seç",st.slots.filter(function(x){return x.by===st.me}).length,[1,7,30]),
+  A("⭐","Günün Şarkısı","Zaman sekmesinde # şarkı seç",st.slots.filter(function(x){return x.by===st.me&&x.key.indexOf("not-")!==0}).length,[1,7,30]),
   A("🏆","Liste Yapıcı","Top listelerinde # yer doldur",["t3","t5","t10"].reduce(function(t,k){return t+(mt[k]||[]).filter(Boolean).length},0),[3,8,18]),
   A("🎧","Tekrar Tekrar","# kez dinle",lis,[10,50,200,500]),
   A("💞","Aynı Frekans","İkiniz de # ortak mood'da şarkı eklediniz",pc(function(s){return s.mood}),[1,3,6]),A("🤝","Ortak Zevk","# ortak sanatçınız var",pc(function(s){return norm(s.artist)}),[1,3,10]),
@@ -386,26 +398,28 @@ document.addEventListener("click",function(e){var t=e.target.closest("button,a")
   if(a==="nodel"){st.del=null;st.derr="";render();return}
   if(a==="app"){st.app=v;try{localStorage.setItem("app",v)}catch(x){}render();return}
   if(a==="tv"){st.topv=v;render();return}
-  if(a==="ck")st.cat=[v,null];else if(a==="cv")st.cat[1]=v===""?null:v;else if(a==="cday")st.cal.d=v;
+  if(a==="ck")st.cat=[v,null];else if(a==="cv")st.cat[1]=v===""?null:v;else if(a==="cday"){st.cal.d=v;st.dnv=null;st.dnok=null}
   else if(a==="cprev"||a==="cnext"){var c=st.cal,d=new Date(c.y,c.m+(a==="cnext"?1:-1),1);c.y=d.getFullYear();c.m=d.getMonth()}else return;render()});
 
-render();
+function boot(){if(st.booted)return;st.booted=true;setTimeout(function(){if(!st.loaded){st.loaded=true;render()}},8000);
 (async function(){
   try{
     user=await claude.use("user");db=await claude.use("db");
-    if(!db||!user){render();return}
+    if(!db||!user){st.bootErr=true;render();return}
     st.me=await user.id();
     var prof=await user.me().catch(function(){return null});
     db.collection("songs").orderBy("ts","desc").onSnapshot(function(snap){
       st.songs=snap.docs.map(function(d){var o=Object.assign({},d.data());o.id=d.id;return o});
-      render();names();
-    },function(){st.err="Bağlantı hatası";render()});
+      st.loaded=true;render();names();
+    },function(){st.err="Bağlantı hatası";st.loaded=true;render()});
     db.collection("slots").onSnapshot(function(snap){st.slots=snap.docs.map(function(d){var o=Object.assign({},d.data());o.id=d.id;return o});render();names()},function(){});
   db.collection("tops").onSnapshot(function(snap){st.tops=snap.docs.map(function(d){var o=Object.assign({},d.data());o.id=d.id;return o});render()},function(){});
   db.collection("rates").onSnapshot(function(snap){st.rates=snap.docs.map(function(d){var o=Object.assign({},d.data());o.id=d.id;return o});render()},function(){});
   db.collection("listens").onSnapshot(function(snap){st.listens=snap.docs.map(function(d){var o=Object.assign({},d.data());o.id=d.id;return o});render()},function(){});
-  }catch(e){db=null;render()}
-})();
+  }catch(e){db=null;st.bootErr=true;render()}
+})()}
+window.smBoot=function(){st.bootErr=false;st.booted=false;st.loaded=false;boot();render()};
+render();boot();
 </script>
 </body>
 </html>
